@@ -361,11 +361,102 @@ def read_mac_system() -> tuple[dict[str, int | float | bool | str], dict[str, st
     return fields, tags
 
 
+def parse_gpu_plist(
+    raw_plist: bytes,
+    total_mem_bytes: int | None = None,
+) -> tuple[dict[str, int | float | bool | str], dict[str, str]]:
+    """Parse `ioreg -arw0 -c IOAccelerator` XML plist into GPU util & memory fields."""
+    if not raw_plist.strip():
+        return {}, {}
+
+    entries = plistlib.loads(raw_plist)
+    if not entries or not isinstance(entries, list):
+        return {}, {}
+
+    # Prefer an accelerator entry that actually exposes PerformanceStatistics.
+    accel: dict[str, Any] | None = None
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("PerformanceStatistics"):
+            accel = entry
+            break
+    if accel is None:
+        return {}, {}
+
+    ps: dict[str, Any] = accel.get("PerformanceStatistics") or {}
+    fields: dict[str, int | float | bool | str] = {}
+    tags: dict[str, str] = {}
+
+    gpu_model = accel.get("model")
+    if isinstance(gpu_model, str) and gpu_model.strip():
+        tags["gpu_model"] = gpu_model.strip()
+
+    cores = accel.get("gpu-core-count")
+    if isinstance(cores, int):
+        fields["cores"] = cores
+
+    if ps.get("Device Utilization %") is not None:
+        fields["util_pct"] = int(ps["Device Utilization %"])
+    if ps.get("Renderer Utilization %") is not None:
+        fields["renderer_util_pct"] = int(ps["Renderer Utilization %"])
+    if ps.get("Tiler Utilization %") is not None:
+        fields["tiler_util_pct"] = int(ps["Tiler Utilization %"])
+
+    alloc_bytes = ps.get("Alloc system memory")
+    if isinstance(alloc_bytes, int) and alloc_bytes >= 0:
+        fields["mem_alloc_bytes"] = alloc_bytes
+        fields["mem_alloc_mb"] = round(alloc_bytes / (1024.0 * 1024.0), 2)
+        if total_mem_bytes and total_mem_bytes > 0:
+            fields["mem_alloc_pct"] = round((alloc_bytes / total_mem_bytes) * 100.0, 2)
+
+    in_use_bytes = ps.get("In use system memory")
+    if isinstance(in_use_bytes, int) and in_use_bytes >= 0:
+        fields["mem_in_use_bytes"] = in_use_bytes
+        fields["mem_in_use_mb"] = round(in_use_bytes / (1024.0 * 1024.0), 2)
+        if total_mem_bytes and total_mem_bytes > 0:
+            fields["mem_in_use_pct"] = round((in_use_bytes / total_mem_bytes) * 100.0, 2)
+
+    driver_bytes = ps.get("In use system memory (driver)")
+    if isinstance(driver_bytes, int) and driver_bytes >= 0:
+        fields["mem_driver_bytes"] = driver_bytes
+
+    return fields, tags
+
+
+def read_total_mem_bytes() -> int | None:
+    try:
+        out = subprocess.check_output(
+            ["/usr/sbin/sysctl", "-n", "hw.memsize"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+        ).strip()
+        return int(out)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def read_gpu(total_mem_bytes: int | None) -> tuple[dict[str, int | float | bool | str], dict[str, str]]:
+    try:
+        raw = subprocess.check_output(
+            ["/usr/sbin/ioreg", "-arw0", "-c", "IOAccelerator"],
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {}, {}
+    return parse_gpu_plist(raw, total_mem_bytes=total_mem_bytes)
+
+
 def collect_lines(state_path: Path | None = None) -> list[str]:
     lines: list[str] = []
     sys_fields, sys_tags = read_mac_system()
     if sys_fields:
         lines.append(format_line("mac_system", sys_fields, tags=sys_tags))
+
+    gpu_fields, gpu_tags = read_gpu(total_mem_bytes=read_total_mem_bytes())
+    if gpu_fields:
+        merged_gpu_tags = {**sys_tags, **gpu_tags}
+        lines.append(format_line("mac_gpu", gpu_fields, tags=merged_gpu_tags))
 
     power_fields = read_smart_battery(state_path or default_state_path())
     if power_fields:

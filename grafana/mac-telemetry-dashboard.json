@@ -165,6 +165,46 @@
       ],
       "title": "Thermal State & Low Power Mode",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": { "fillOpacity": 15, "lineWidth": 2 }
+        }
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 22 },
+      "id": 8,
+      "targets": [
+        {
+          "query": "from(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"mac_gpu\" and r.host == \"${host}\")\n  |> filter(fn: (r) => r._field == \"util_pct\" or r._field == \"renderer_util_pct\" or r._field == \"tiler_util_pct\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "refId": "A"
+        }
+      ],
+      "title": "GPU Utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": { "fillOpacity": 15, "lineWidth": 2 }
+        }
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 22 },
+      "id": 9,
+      "targets": [
+        {
+          "query": "from(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"mac_gpu\" and r.host == \"${host}\")\n  |> filter(fn: (r) => r._field == \"mem_alloc_bytes\" or r._field == \"mem_in_use_bytes\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)",
+          "refId": "A"
+        }
+      ],
+      "title": "GPU Unified Memory (Allocated vs In-Use)",
+      "type": "timeseries"
     }
   ],
   "schemaVersion": 39,

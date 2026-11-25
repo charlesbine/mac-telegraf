@@ -101,6 +101,34 @@ class TestMacTelemetry(unittest.TestCase):
             "mac_power,model=MacBookPro18\\,2 cycle_count=569i,is_charging=0i,system_load_w=25.5 1700000000000000000",
         )
 
+    def test_parse_gpu_plist(self) -> None:
+        sample = [
+            {
+                "model": "Apple M1 Max",
+                "gpu-core-count": 32,
+                "PerformanceStatistics": {
+                    "Device Utilization %": 42,
+                    "Renderer Utilization %": 38,
+                    "Tiler Utilization %": 12,
+                    "Alloc system memory": 16 * 1024**3,
+                    "In use system memory": 8 * 1024**3,
+                    "In use system memory (driver)": 128 * 1024**2,
+                },
+            }
+        ]
+        fields, tags = mac_telemetry.parse_gpu_plist(
+            plistlib.dumps(sample), total_mem_bytes=64 * 1024**3
+        )
+        self.assertEqual(tags["gpu_model"], "Apple M1 Max")
+        self.assertEqual(fields["cores"], 32)
+        self.assertEqual(fields["util_pct"], 42)
+        self.assertEqual(fields["renderer_util_pct"], 38)
+        self.assertEqual(fields["tiler_util_pct"], 12)
+        self.assertEqual(fields["mem_alloc_mb"], 16384.0)
+        self.assertEqual(fields["mem_in_use_mb"], 8192.0)
+        self.assertEqual(fields["mem_alloc_pct"], 25.0)
+        self.assertEqual(fields["mem_in_use_pct"], 12.5)
+
     def test_powerlog_backfill_lines(self) -> None:
         records = [
             {
