@@ -59,7 +59,7 @@
 # ---- macOS / Apple Silicon power, battery, memory pressure, and thermal state ----
 
 [[inputs.exec]]
-  command = ["/usr/bin/env", "python3", "${MAC_TELEGRAF_DIR}/scripts/mac_telemetry.py"]
+  commands = [["/usr/bin/env", "python3", "${MAC_TELEGRAF_DIR}/scripts/mac_telemetry.py"]]
   timeout = "5s"
   data_format = "influx"
 
