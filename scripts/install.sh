@@ -46,7 +46,10 @@ sed -e "s|/PATH/TO/mac-telegraf|${INSTALL_DIR}|g" \
     -e "s|__SESSION_TYPE__|${SESSION_TYPE}|g" \
     "${REPO_DIR}/launchd/com.charlesbine.mac-telegraf.plist.example" > "${PLIST_PATH}"
 
-launchctl bootout "${DOMAIN}/${LABEL}" 2>/dev/null || true
+if launchctl print "${DOMAIN}/${LABEL}" >/dev/null 2>&1; then
+  launchctl bootout "${DOMAIN}/${LABEL}" 2>/dev/null || true
+  sleep 1
+fi
 launchctl bootstrap "${DOMAIN}" "${PLIST_PATH}"
 
 echo "Installed to ${INSTALL_DIR} and loaded ${LABEL} in ${DOMAIN} (${SESSION_TYPE})."
