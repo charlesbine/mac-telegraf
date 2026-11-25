@@ -172,65 +172,78 @@ def parse_smart_battery_plist(
     )
 
     fields: dict[str, int | float | bool | str] = {}
+    has_battery = bool(b.get("BatteryInstalled", b.get("DesignCapacity") is not None))
 
-    if sys_load_w is not None:
-        fields["system_load_w"] = sys_load_w
-    if sys_load_mw is not None:
-        fields["system_load_inst_w"] = round(sys_load_mw / 1000.0, 3)
-    if sys_pin_w is not None:
-        fields["system_power_in_w"] = sys_pin_w
-    if sys_pin_mw is not None:
-        fields["system_power_in_inst_w"] = round(sys_pin_mw / 1000.0, 3)
-    if pt.get("AdapterEfficiencyLoss") is not None:
-        fields["adapter_efficiency_loss_w"] = round(pt["AdapterEfficiencyLoss"] / 1000.0, 3)
-    if pt.get("SystemVoltageIn") is not None:
-        fields["input_voltage_v"] = round(pt["SystemVoltageIn"] / 1000.0, 3)
-    if pt.get("SystemCurrentIn") is not None:
-        fields["input_current_a"] = round(pt["SystemCurrentIn"] / 1000.0, 3)
+    if has_battery:
+        if sys_load_w is not None:
+            fields["system_load_w"] = sys_load_w
+        if sys_load_mw is not None:
+            fields["system_load_inst_w"] = round(sys_load_mw / 1000.0, 3)
+        if sys_pin_w is not None:
+            fields["system_power_in_w"] = sys_pin_w
+        if sys_pin_mw is not None:
+            fields["system_power_in_inst_w"] = round(sys_pin_mw / 1000.0, 3)
+        if pt.get("AdapterEfficiencyLoss") is not None:
+            fields["adapter_efficiency_loss_w"] = round(pt["AdapterEfficiencyLoss"] / 1000.0, 3)
 
-    batt_power_mw = to_signed_int64(pt.get("BatteryPower"))
-    if batt_power_mw is not None:
-        fields["battery_power_w"] = round(batt_power_mw / 1000.0, 3)
+    vin_mv = pt.get("SystemVoltageIn")
+    iin_ma = pt.get("SystemCurrentIn")
+    if vin_mv is not None and vin_mv > 0:
+        fields["input_voltage_v"] = round(vin_mv / 1000.0, 3)
+    if iin_ma is not None and iin_ma >= 0:
+        fields["input_current_a"] = round(iin_ma / 1000.0, 3)
+    if vin_mv is not None and iin_ma is not None and vin_mv > 0 and iin_ma >= 0:
+        input_power_w = round((vin_mv / 1000.0) * (iin_ma / 1000.0), 3)
+        fields["input_power_w"] = input_power_w
+        if not has_battery:
+            # Desktop Macs (e.g. Mac Studio) report 0 for SystemLoad/SystemPowerIn
+            # while exposing real 12V rail voltage & current in PowerTelemetryData.
+            fields["system_power_in_w"] = input_power_w
 
-    external_connected = bool(b.get("ExternalConnected", False))
-    is_charging = bool(b.get("IsCharging", False))
-    fully_charged = bool(b.get("FullyCharged", False))
-    fields["external_connected"] = 1 if external_connected else 0
-    fields["is_charging"] = 1 if is_charging else 0
-    fields["fully_charged"] = 1 if fully_charged else 0
+    if has_battery:
+        batt_power_mw = to_signed_int64(pt.get("BatteryPower"))
+        if batt_power_mw is not None:
+            fields["battery_power_w"] = round(batt_power_mw / 1000.0, 3)
 
-    adapter_watts = int(ad["Watts"]) if external_connected and ad.get("Watts") is not None else 0
-    fields["adapter_watts"] = adapter_watts
+        external_connected = bool(b.get("ExternalConnected", False))
+        is_charging = bool(b.get("IsCharging", False))
+        fully_charged = bool(b.get("FullyCharged", False))
+        fields["external_connected"] = 1 if external_connected else 0
+        fields["is_charging"] = 1 if is_charging else 0
+        fields["fully_charged"] = 1 if fully_charged else 0
 
-    current_cap = b.get("CurrentCapacity")
-    max_cap = b.get("MaxCapacity")
-    if current_cap is not None and max_cap:
-        fields["battery_pct"] = round((current_cap / max_cap) * 100.0, 2)
+        adapter_watts = int(ad["Watts"]) if external_connected and ad.get("Watts") is not None else 0
+        fields["adapter_watts"] = adapter_watts
 
-    raw_curr = b.get("AppleRawCurrentCapacity")
-    raw_max = b.get("AppleRawMaxCapacity")
-    design_cap = b.get("DesignCapacity")
-    if raw_curr is not None:
-        fields["current_capacity_mah"] = int(raw_curr)
-    if raw_max is not None:
-        fields["max_capacity_mah"] = int(raw_max)
-    if design_cap is not None:
-        fields["design_capacity_mah"] = int(design_cap)
-    if raw_curr is not None and raw_max:
-        fields["battery_raw_pct"] = round((raw_curr / raw_max) * 100.0, 2)
-    if raw_max is not None and design_cap:
-        fields["health_pct"] = round((raw_max / design_cap) * 100.0, 2)
+        current_cap = b.get("CurrentCapacity")
+        max_cap = b.get("MaxCapacity")
+        if current_cap is not None and max_cap:
+            fields["battery_pct"] = round((current_cap / max_cap) * 100.0, 2)
 
-    if b.get("CycleCount") is not None:
-        fields["cycle_count"] = int(b["CycleCount"])
-    if b.get("Temperature") is not None:
-        fields["battery_temp_c"] = round(b["Temperature"] / 100.0, 2)
-    if b.get("Voltage") is not None:
-        fields["battery_voltage_v"] = round(b["Voltage"] / 1000.0, 3)
+        raw_curr = b.get("AppleRawCurrentCapacity")
+        raw_max = b.get("AppleRawMaxCapacity")
+        design_cap = b.get("DesignCapacity")
+        if raw_curr is not None:
+            fields["current_capacity_mah"] = int(raw_curr)
+        if raw_max is not None:
+            fields["max_capacity_mah"] = int(raw_max)
+        if design_cap is not None:
+            fields["design_capacity_mah"] = int(design_cap)
+        if raw_curr is not None and raw_max:
+            fields["battery_raw_pct"] = round((raw_curr / raw_max) * 100.0, 2)
+        if raw_max is not None and design_cap:
+            fields["health_pct"] = round((raw_max / design_cap) * 100.0, 2)
 
-    inst_amp = to_signed_int64(b.get("InstantAmperage"))
-    if inst_amp is not None:
-        fields["battery_current_a"] = round(inst_amp / 1000.0, 3)
+        if b.get("CycleCount") is not None:
+            fields["cycle_count"] = int(b["CycleCount"])
+        if b.get("Temperature") is not None:
+            fields["battery_temp_c"] = round(b["Temperature"] / 100.0, 2)
+        if b.get("Voltage") is not None:
+            fields["battery_voltage_v"] = round(b["Voltage"] / 1000.0, 3)
+
+        inst_amp = to_signed_int64(b.get("InstantAmperage"))
+        if inst_amp is not None:
+            fields["battery_current_a"] = round(inst_amp / 1000.0, 3)
 
     next_state = {
         "ts": now,

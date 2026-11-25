@@ -55,23 +55,19 @@ set -a && source .env && set +a
 MAC_TELEGRAF_DIR="$(pwd)" telegraf --config telegraf.conf --test
 ```
 
-### 4. Run as a background LaunchAgent
+### 4. Install and run as a background LaunchAgent
 
 ```bash
-cp launchd/com.charlesbine.mac-telegraf.plist.example \
-   ~/Library/LaunchAgents/com.charlesbine.mac-telegraf.plist
-
-# Replace /PATH/TO/mac-telegraf with your checkout path
-sed -i '' "s|/PATH/TO/mac-telegraf|$(pwd)|g" \
-   ~/Library/LaunchAgents/com.charlesbine.mac-telegraf.plist
-
-launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.charlesbine.mac-telegraf.plist
+./scripts/install.sh
 ```
+
+`install.sh` copies the runtime files and `.env` (`0600`) to `~/.local/share/mac-telegraf` (avoiding macOS TCC restrictions on `~/Documents` or `~/Desktop`), detects GUI vs. headless `launchd` sessions automatically, and loads `com.charlesbine.mac-telegraf`.
 
 Check logs at `/tmp/mac-telegraf.err.log`. To stop and unload:
 
 ```bash
-launchctl bootout "gui/$(id -u)" ~/Library/LaunchAgents/com.charlesbine.mac-telegraf.plist
+launchctl bootout "gui/$(id -u)/com.charlesbine.mac-telegraf"
+# (or user/$(id -u)/com.charlesbine.mac-telegraf on headless Macs)
 ```
 
 ## Optional: Backfill Historical Power Data

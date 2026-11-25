@@ -11,6 +11,9 @@
     <string>/PATH/TO/mac-telegraf/scripts/run_telegraf.sh</string>
   </array>
 
+  <key>LimitLoadToSessionType</key>
+  <string>__SESSION_TYPE__</string>
+
   <key>RunAtLoad</key>
   <true/>
 

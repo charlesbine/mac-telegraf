@@ -72,6 +72,29 @@ class TestMacTelemetry(unittest.TestCase):
         self.assertAlmostEqual(float(fields["health_pct"]), 76.88, places=2)
         self.assertEqual(next_state["acc_sys_load_cnt"], 160)
 
+    def test_parse_smart_battery_desktop_mac_rail_power(self) -> None:
+        sample = [
+            {
+                "BatteryInstalled": False,
+                "ExternalConnected": True,
+                "PowerTelemetryData": {
+                    "SystemLoad": 0,
+                    "SystemPowerIn": 0,
+                    "SystemVoltageIn": 12053,
+                    "SystemCurrentIn": 1965,
+                },
+            }
+        ]
+        fields, _ = mac_telemetry.parse_smart_battery_plist(
+            plistlib.dumps(sample), {}, now_ts=1000.0
+        )
+        self.assertEqual(fields["input_voltage_v"], 12.053)
+        self.assertEqual(fields["input_current_a"], 1.965)
+        self.assertAlmostEqual(float(fields["input_power_w"]), 23.684, places=3)
+        self.assertAlmostEqual(float(fields["system_power_in_w"]), 23.684, places=3)
+        self.assertNotIn("battery_pct", fields)
+        self.assertNotIn("cycle_count", fields)
+
     def test_parse_smart_battery_desktop_mac_empty(self) -> None:
         fields, next_state = mac_telemetry.parse_smart_battery_plist(
             plistlib.dumps([]), {}, now_ts=1000.0
