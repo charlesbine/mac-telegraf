@@ -1,0 +1,63 @@
+# Lightweight macOS Telegraf config for InfluxDB v2 + Grafana.
+# Copy to `telegraf.conf` and supply env vars from `.env` (or launchd wrapper).
+#
+# Designed for laptops and desktop Macs alike:
+# - 60s poll interval keeps background CPU/battery overhead negligible (~0.1% CPU)
+# - Large in-memory buffer survives sleep, Wi-Fi switches, and offline travel
+# - Emits standard Telegraf host schemas (cpu, mem, swap, disk, diskio, net, system)
+#   plus Apple Silicon power, battery, memory-pressure, and thermal metrics via exec.
+
+[agent]
+  interval = "60s"
+  round_interval = true
+  metric_batch_size = 1000
+  metric_buffer_limit = 50000
+  collection_jitter = "5s"
+  flush_interval = "60s"
+  flush_jitter = "10s"
+  precision = "1s"
+  hostname = "${MAC_HOSTNAME}"
+  omit_hostname = false
+
+[global_tags]
+  host_role = "${MAC_HOST_ROLE}"
+  os = "macos"
+
+[[outputs.influxdb_v2]]
+  urls = ["${INFLUXDB_URL}"]
+  token = "${INFLUXDB_TOKEN}"
+  organization = "${INFLUXDB_ORG}"
+  bucket = "${INFLUXDB_BUCKET}"
+  timeout = "10s"
+
+# ---- Standard host metrics (compatible with standard Telegraf/Grafana dashboards) ----
+
+[[inputs.cpu]]
+  percpu = false
+  totalcpu = true
+  collect_cpu_time = false
+  report_active = true
+
+[[inputs.mem]]
+
+[[inputs.swap]]
+
+[[inputs.system]]
+
+[[inputs.processes]]
+
+[[inputs.disk]]
+  mount_points = ["/"]
+  ignore_fs = ["tmpfs", "devtmpfs", "devfs", "autofs", "nullfs"]
+
+[[inputs.diskio]]
+
+[[inputs.net]]
+  interfaces = ["en*"]
+
+# ---- macOS / Apple Silicon power, battery, memory pressure, and thermal state ----
+
+[[inputs.exec]]
+  commands = ["/usr/bin/env python3 ${MAC_TELEGRAF_DIR}/scripts/mac_telemetry.py"]
+  timeout = "5s"
+  data_format = "influx"

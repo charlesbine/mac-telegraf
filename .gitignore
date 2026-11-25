@@ -1,0 +1,10 @@
+.env
+telegraf.conf
+launchd/*.plist
+*.log
+state.json
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.DS_Store
