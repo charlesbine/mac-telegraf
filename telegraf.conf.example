@@ -16,6 +16,7 @@
   flush_interval = "60s"
   flush_jitter = "10s"
   precision = "1s"
+  skip_processors_after_aggregators = true
   hostname = "${MAC_HOSTNAME}"
   omit_hostname = false
 
@@ -58,6 +59,13 @@
 # ---- macOS / Apple Silicon power, battery, memory pressure, and thermal state ----
 
 [[inputs.exec]]
-  commands = ["/usr/bin/env python3 ${MAC_TELEGRAF_DIR}/scripts/mac_telemetry.py"]
+  command = ["/usr/bin/env", "python3", "${MAC_TELEGRAF_DIR}/scripts/mac_telemetry.py"]
   timeout = "5s"
   data_format = "influx"
+
+# Optional: if your InfluxDB bucket already stores `system.uptime` as float
+# (e.g. from SNMP or another collector), uncomment to avoid field-type conflicts:
+# [[processors.converter]]
+#   namepass = ["system"]
+#   [processors.converter.fields]
+#     float = ["uptime"]
